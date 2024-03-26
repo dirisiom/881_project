@@ -1,5 +1,6 @@
 ./data_2024
 ./data_2024/
 *.npz
+*.npy
 *.json
 .idea
