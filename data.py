@@ -1,15 +1,14 @@
+import json
+
+import numpy as np
+import scipy.sparse as sp
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
-import torch_geometric.transforms as T
-from sklearn.preprocessing import StandardScaler
-from torch_geometric.loader import DataLoader
-import scipy.sparse as sp
-import numpy as np
-import json
-from torch_geometric.utils import from_scipy_sparse_matrix
-from torch_geometric.data import Data
 from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+from torch_geometric.data import Data
+from torch_geometric.nn import GCNConv
+from torch_geometric.utils import from_scipy_sparse_matrix
 from tqdm import tqdm
 
 adj = sp.load_npz('./data_2024/adj.npz')
@@ -64,8 +63,10 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(data.y)):
     # TODO: This was where I started having some issues, I am not totally certain
     # on how all this indexing should work, so I thought maybe it was something
     # you could take a look at
-    train_mask = torch.zeros(len(idx_train), dtype=torch.bool)
-    val_mask = torch.zeros(len(idx_train), dtype=torch.bool)
+    # train_mask = torch.zeros(len(idx_train), dtype=torch.bool)
+    # val_mask = torch.zeros(len(idx_train), dtype=torch.bool)
+    train_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+    val_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
 
     train_mask[train_idx] = True
     val_mask[val_idx] = True
@@ -75,15 +76,14 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(data.y)):
         model.train()
         optim.zero_grad()
         out = model(data)
-        # TODO: this was where the indexing got bad again
-        loss = F.nll_loss(out[train_mask], data.y[train_mask])
+        loss = F.nll_loss(out[train_mask], data.y[train_mask.nonzero().squeeze()])
         loss.backward()
         optim.step()
 
         if epoch % 10 == 0:
             model.eval()
             _, pred = out.max(1)
-            correct = pred[val_mask].eq(data.y[val_mask]).sum().item()
+            correct = pred[val_mask].eq(data.y[val_mask.nonzero()]).sum().item()
             acc = correct / val_mask.size(0)
             print(f'Epoch {epoch}, Loss: {loss.item(): .4f}, Validation Acc: {acc: .4f}')
         if epoch == 200:
