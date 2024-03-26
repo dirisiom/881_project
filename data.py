@@ -61,24 +61,30 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(data.y)):
     lr = 0.01
     optim = torch.optim.Adam(model.parameters(), lr=lr)
 
-    # Convert idx to tensors for indexing
-    train_idx_tensor = torch.tensor(idx_train)[torch.tensor(train_idx)]
-    val_idx_tensor = torch.tensor(idx_train)[torch.tensor(val_idx)]
+    # TODO: This was where I started having some issues, I am not totally certain
+    # on how all this indexing should work, so I thought maybe it was something
+    # you could take a look at
+    train_mask = torch.zeros(len(idx_train), dtype=torch.bool)
+    val_mask = torch.zeros(len(idx_train), dtype=torch.bool)
+
+    train_mask[train_idx] = True
+    val_mask[val_idx] = True
 
     acc = -1
     for epoch in tqdm(range(1, 201), desc=f'Training Fold {fold + 1}'):
         model.train()
         optim.zero_grad()
         out = model(data)
-        loss = F.nll_loss(out[train_idx_tensor], data.y[train_idx_tensor])
+        # TODO: this was where the indexing got bad again
+        loss = F.nll_loss(out[train_mask], data.y[train_mask])
         loss.backward()
         optim.step()
 
         if epoch % 10 == 0:
             model.eval()
             _, pred = out.max(1)
-            correct = pred[val_idx_tensor].eq(data.y[val_idx_tensor]).sum().item()
-            acc = correct / val_idx_tensor.size(0)
+            correct = pred[val_mask].eq(data.y[val_mask]).sum().item()
+            acc = correct / val_mask.size(0)
             print(f'Epoch {epoch}, Loss: {loss.item(): .4f}, Validation Acc: {acc: .4f}')
         if epoch == 200:
             torch.save(model.state_dict(), f'model_fold_{fold}.pth')
