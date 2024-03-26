@@ -36,9 +36,7 @@ class GCN(torch.nn.Module):
         self.bn1 = BatchNorm(64)
         self.conv2 = GCNConv(64, 128)
         self.bn2 = BatchNorm(128)
-        self.conv3 = GCNConv(128, 256)
-        self.bn3 = BatchNorm(256)
-        self.conv4 = GCNConv(256, num_classes)
+        self.conv3 = GCNConv(128, num_classes)
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
@@ -47,9 +45,7 @@ class GCN(torch.nn.Module):
         x = F.dropout(x, p=0.3, training=self.training)
         x = F.relu(self.bn2(self.conv2(x, edge_index)))
         x = F.dropout(x, p=0.3, training=self.training)
-        x = F.relu(self.bn3(self.conv3(x, edge_index)))
-        x = F.dropout(x, p=0.3, training=self.training)
-        x = self.conv4(x, edge_index)
+        x = self.conv3(x, edge_index)
 
         return F.log_softmax(x, dim=1)
 
@@ -100,6 +96,8 @@ print(val_accs)
 average_val_acc = sum(val_accs) / splits
 print(f'Average Validation Accuracy: {average_val_acc:.4f}')
 
+# this is probably not the best way to do this but i was selecting the model
+# based on the highest validationn accuracy at the last epoch for each fold
 best_fold = val_accs.index(max(val_accs))
 best_path = f'model_fold_{best_fold}.pth'
 
