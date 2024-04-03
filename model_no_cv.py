@@ -89,10 +89,10 @@ crit = torch.nn.NLLLoss()
 
 
 val_l_min = np.inf
-patience = 40
+patience = 80
 counter = 0
 model.train()
-for epoch in tqdm(range(300)):
+for epoch in tqdm(range(500)):
     optim.zero_grad()
     out = model(data)
 
