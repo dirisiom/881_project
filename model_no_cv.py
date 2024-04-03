@@ -34,19 +34,19 @@ print()
 class GCN(torch.nn.Module):
     def __init__(self, feat_num, class_num):
         super(GCN, self).__init__()
-        self.conv1 = GCNConv(feat_num, 64)
-        self.bn1 = BatchNorm(64)
-        self.conv2 = GCNConv(64, 128)
-        self.bn2 = BatchNorm(128)
-        self.conv3 = GCNConv(128, class_num)
+        self.conv1 = GCNConv(feat_num, 8)
+        self.bn1 = BatchNorm(8)
+        self.conv2 = GCNConv(8, 16)
+        self.bn2 = BatchNorm(16)
+        self.conv3 = GCNConv(16, class_num)
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
 
         x = F.relu(self.bn1(self.conv1(x, edge_index)))
-        x = F.dropout(x, p=0.3, training=self.training)
+        x = F.dropout(x, p=0.6, training=self.training)
         x = F.relu(self.bn2(self.conv2(x, edge_index)))
-        x = F.dropout(x, p=0.3, training=self.training)
+        x = F.dropout(x, p=0.6, training=self.training)
         x = self.conv3(x, edge_index)
 
         return F.log_softmax(x, dim=1)
@@ -60,7 +60,7 @@ idx_train_sort.sort()
 
 inv_map = {v: i for i, v in enumerate(idx_train_sort)}
 
-idx_train_no_val, idx_val = train_test_split(idx_train, test_size=0.2, random_state=5757)
+idx_train_no_val, idx_val = train_test_split(idx_train, test_size=0.1, random_state=5757)
 idx_train_no_val.sort()
 idx_val.sort()
 
@@ -76,16 +76,21 @@ for idx in idx_val:
 # train_mask[idx_train_no_val] = True
 # val_mask[idx_val] = True
 
-model = GCN(num_feats, num_classes)
-optim = torch.optim.Adam(model.parameters(), lr=0.007)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+model = GCN(num_feats, num_classes).to(device)
+data.x = data.x.to(device)
+data.edge_index = data.edge_index.to(device)
+data.y = data.y.to(device)
+optim = torch.optim.Adam(model.parameters(), lr=0.007, weight_decay=5e-4)
 crit = torch.nn.NLLLoss()
 
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # model.to(device)
-# data.x = data.x.to(device)
-# data.edge_index = data.edge_index.to(device)
-# data.y = data.y.to(device)
 
+
+val_l_min = np.inf
+patience = 40
+counter = 0
 model.train()
 for epoch in tqdm(range(300)):
     optim.zero_grad()
@@ -96,17 +101,32 @@ for epoch in tqdm(range(300)):
     optim.step()
 
     model.eval()
-    _, pred = model(data).max(dim=1)
+    with torch.no_grad():
+        out = model(data)
+        _, pred = out.max(dim=1)
+        val_loss = crit(out[idx_val], data.y[val_mask.nonzero().squeeze()])
     train_corr = float(pred[idx_train_no_val].eq(data.y[train_mask.nonzero().squeeze()]).sum().item())
     correct = float(pred[idx_val].eq(data.y[val_mask]).sum().item())
     acc = correct / len(idx_val)
     if epoch % 10 == 0:
-        print(f'Epoch: {epoch + 1}, Loss: {loss.item()}, Validation Acc: {acc}')
+        print(f'Epoch: {epoch + 1}, Loss: {loss.item()}, Validation Acc: {acc}, '
+              f'Train Acc: {train_corr/len(idx_train_no_val)}', )
+    if val_loss < val_l_min:
+        val_l_min = val_loss
+        counter = 0
+    else:
+        counter += 1
 
+    if counter >= patience:
+        print('Early stop')
+        break
+
+model = model.to('cpu')
 torch.save(model.state_dict(), 'gcn_model_no_cv.pth')
 
 model.load_state_dict(torch.load('gcn_model_no_cv.pth'))
 
+model = model.to(device)
 model.eval()
 with torch.no_grad():
     out = model(data)
@@ -114,4 +134,5 @@ with torch.no_grad():
 
 # save our results
 preds = test_preds[idx_test]
+preds = preds.to('cpu')
 np.savetxt('submission.txt', preds, fmt='%d')
