@@ -17,8 +17,9 @@ labels = np.load('./data_2024/labels.npy')
 splits = json.load(open('./data_2024/splits.json'))
 idx_train, idx_test = splits['idx_train'], splits['idx_test']
 
-scaler = StandardScaler()
-feats_normed = scaler.fit_transform(feat)
+# scaler = StandardScaler()
+# feats_normed = scaler.fit_transform(feat)
+feats_normed = feat
 
 edge_index, _ = from_scipy_sparse_matrix(adj)
 x = torch.tensor(feats_normed, dtype=torch.float)
