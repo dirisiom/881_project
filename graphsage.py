@@ -4,13 +4,12 @@ import numpy as np
 import scipy.sparse as sp
 import torch
 import torch.nn.functional as F
-from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch_geometric.data import Data
-from torch_geometric.nn import SAGEConv, BatchNorm
+from torch_geometric.nn import SAGEConv
 from torch_geometric.utils import from_scipy_sparse_matrix
 from tqdm import tqdm
-from sklearn.model_selection import train_test_split
 
 adj = sp.load_npz('./data_2024/adj.npz')
 feat = np.load('./data_2024/features.npy')
@@ -20,13 +19,14 @@ idx_train, idx_test = splits['idx_train'], splits['idx_test']
 
 scaler = StandardScaler()
 feats_normed = scaler.fit_transform(feat)
-# feats_normed = feat
 
 edge_index, _ = from_scipy_sparse_matrix(adj)
 x = torch.tensor(feats_normed, dtype=torch.float)
-y = torch.tensor(labels, dtype=torch.long)
+y = torch.tensor(labels, dtype=torch.uint8)
+y_full = torch.zeros(feat.shape[0], dtype=torch.uint8)
+y_full[idx_train] = y
 
-data = Data(x=x, edge_index=edge_index, y=y)
+data = Data(x=x, edge_index=edge_index, y=y_full)
 
 print()
 
@@ -75,35 +75,26 @@ model = GraphSAGE(num_feats, hidden, num_classes).to(device)
 data.x = data.x.to(device)
 data.edge_index = data.edge_index.to(device)
 data.y = data.y.to(device)
+
 # TODO: try new optims
-optim = torch.optim.Adam(model.parameters(), lr=0.002, weight_decay=4e-3)
+optim = torch.optim.Adam(model.parameters(), lr=0.004, weight_decay=4e-3)
 # optim = torch.optim.Adam(model.parameters(), lr=0.0005)
 crit = torch.nn.NLLLoss()
 
-idx_train_sort = idx_train[:]
-idx_train_sort.sort()
-
-inv_map = {v: i for i, v in enumerate(idx_train_sort)}
-
 idx_train_no_val, idx_val = train_test_split(idx_train, test_size=0.1, random_state=5757)
-idx_train_no_val.sort()
-idx_val.sort()
 
-train_mask = torch.zeros(data.y.shape[0], dtype=torch.bool)
-val_mask = torch.zeros(data.y.shape[0], dtype=torch.bool)
+train_mask = torch.zeros_like(y_full, dtype=torch.bool)
+train_mask[idx_train_no_val] = True
+val_mask = torch.zeros_like(y_full, dtype=torch.bool)
+val_mask[idx_val] = True
 
-for idx in idx_train_no_val:
-    train_mask[inv_map[idx]] = True
 
-for idx in idx_val:
-    val_mask[inv_map[idx]] = True
-
-epoch_num = 200
+epoch_num = 175
 for epoch in tqdm(range(epoch_num)):
     model.train()
     optim.zero_grad()
     out = model(data.x, data.edge_index)
-    loss = crit(out[idx_train_no_val], data.y[train_mask.nonzero().squeeze()])
+    loss = crit(out[idx_train_no_val], data.y[idx_train_no_val])
     loss.backward()
     optim.step()
 
@@ -111,13 +102,13 @@ for epoch in tqdm(range(epoch_num)):
     with torch.no_grad():
         out = model(data.x, data.edge_index)
         _, pred = out.max(dim=1)
-        val_loss = crit(out[idx_val], data.y[val_mask.nonzero().squeeze()])
-    train_corr = float(pred[idx_train_no_val].eq(data.y[train_mask.nonzero().squeeze()]).sum().item())
-    correct = float(pred[idx_val].eq(data.y[val_mask]).sum().item())
+        val_loss = crit(out[idx_val], data.y[idx_val])
+    train_corr = float(pred[idx_train_no_val].eq(data.y[idx_train_no_val]).sum().item())
+    correct = float(pred[idx_val].eq(data.y[idx_val]).sum().item())
     acc = correct / len(idx_val)
     if epoch % 10 == 0:
         print(f'Epoch: {epoch + 1}, Loss: {loss.item()}, Validation Acc: {acc}, '
-              f'Train Acc: {train_corr / len(idx_train_no_val)}', )
+              f'Validation loss: {val_loss}, Train Acc: {train_corr / len(idx_train_no_val)}', )
 
 model = model.to('cpu')
 torch.save(model.state_dict(), 'sage_no_cv.pth')
