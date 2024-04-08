@@ -89,7 +89,7 @@ val_mask = torch.zeros_like(y_full, dtype=torch.bool)
 val_mask[idx_val] = True
 
 
-epoch_num = 175
+epoch_num = 400
 for epoch in tqdm(range(epoch_num)):
     model.train()
     optim.zero_grad()
@@ -106,7 +106,7 @@ for epoch in tqdm(range(epoch_num)):
     train_corr = float(pred[idx_train_no_val].eq(data.y[idx_train_no_val]).sum().item())
     correct = float(pred[idx_val].eq(data.y[idx_val]).sum().item())
     acc = correct / len(idx_val)
-    if epoch % 10 == 0:
+    if (epoch + 1) % 10 == 0:
         print(f'Epoch: {epoch + 1}, Loss: {loss.item()}, Validation Acc: {acc}, '
               f'Validation loss: {val_loss}, Train Acc: {train_corr / len(idx_train_no_val)}', )
 
