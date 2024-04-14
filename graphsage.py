@@ -68,7 +68,7 @@ class GraphSAGE(torch.nn.Module):
 num_feats = data.num_features
 num_classes = len(np.unique(data.y.numpy()))
 # TODO: tune
-hidden = 32
+hidden = 12
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = GraphSAGE(num_feats, hidden, num_classes).to(device)
@@ -77,7 +77,7 @@ data.edge_index = data.edge_index.to(device)
 data.y = data.y.to(device)
 
 # TODO: try new optims
-optim = torch.optim.Adam(model.parameters(), lr=0.004, weight_decay=4e-3)
+optim = torch.optim.Adam(model.parameters(), lr=0.003, weight_decay=4e-3)
 # optim = torch.optim.Adam(model.parameters(), lr=0.0005)
 crit = torch.nn.NLLLoss()
 
@@ -88,7 +88,8 @@ train_mask[idx_train_no_val] = True
 val_mask = torch.zeros_like(y_full, dtype=torch.bool)
 val_mask[idx_val] = True
 
-
+best_loss = float('inf')
+best_acc = 0
 epoch_num = 400
 for epoch in tqdm(range(epoch_num)):
     model.train()
@@ -99,20 +100,30 @@ for epoch in tqdm(range(epoch_num)):
     optim.step()
 
     model.eval()
+    found_better = False
     with torch.no_grad():
         out = model(data.x, data.edge_index)
         _, pred = out.max(dim=1)
         val_loss = crit(out[idx_val], data.y[idx_val])
+        if val_loss < best_loss:
+            found_better = True
+            best_loss = val_loss
+            model = model.to('cpu')
+            torch.save(model.state_dict(), 'sage_no_cv.pth')
+            model = model.to(device)
     train_corr = float(pred[idx_train_no_val].eq(data.y[idx_train_no_val]).sum().item())
     correct = float(pred[idx_val].eq(data.y[idx_val]).sum().item())
     acc = correct / len(idx_val)
+    if found_better:
+        best_acc = acc
     if (epoch + 1) % 10 == 0:
         print(f'Epoch: {epoch + 1}, Loss: {loss.item()}, Validation Acc: {acc}, '
               f'Validation loss: {val_loss}, Train Acc: {train_corr / len(idx_train_no_val)}', )
 
-model = model.to('cpu')
-torch.save(model.state_dict(), 'sage_no_cv.pth')
-
+# model = model.to('cpu')
+# torch.save(model.state_dict(), 'sage_no_cv.pth')
+print('\n\n\n')
+print(f'Best validation loss: {best_loss}; Corresponding validation accuracy: {best_acc}')
 model.load_state_dict(torch.load('sage_no_cv.pth'))
 
 model = model.to(device)
