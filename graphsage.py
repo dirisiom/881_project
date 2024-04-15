@@ -77,7 +77,7 @@ data.edge_index = data.edge_index.to(device)
 data.y = data.y.to(device)
 
 # TODO: try new optims
-optim = torch.optim.Adam(model.parameters(), lr=0.003, weight_decay=4e-3)
+optim = torch.optim.Adam(model.parameters(), lr=0.003, weight_decay=1e-2)
 # optim = torch.optim.Adam(model.parameters(), lr=0.0005)
 crit = torch.nn.NLLLoss()
 
