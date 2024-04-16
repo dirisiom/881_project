@@ -28,26 +28,6 @@ y_full[idx_train] = y
 
 data = Data(x=x, edge_index=edge_index, y=y_full)
 
-print()
-
-
-# GraphSAGE Model
-# class GraphSAGE(torch.nn.Module):
-#     def __init__(self, in_channels, hidden_channels, out_channels):
-#         super(GraphSAGE, self).__init__()
-#         self.conv1 = SAGEConv(in_channels, hidden_channels)
-#         self.bn1 = BatchNorm(hidden_channels)
-#         self.conv2 = SAGEConv(hidden_channels, hidden_channels)
-#         self.bn2 = BatchNorm(hidden_channels)
-#         self.conv3 = SAGEConv(hidden_channels, out_channels)
-#
-#     def forward(self, x, edge_index):
-#         x = F.relu(self.bn1(self.conv1(x, edge_index)))
-#         x = F.dropout(x, training=self.training)
-#         x = F.relu(self.bn2(self.conv2(x, edge_index)))
-#         x = F.dropout(x, training=self.training)
-#         x = self.conv3(x, edge_index)
-#         return F.log_softmax(x, dim=1)
 
 class GraphSAGE(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels):
@@ -105,23 +85,20 @@ for epoch in tqdm(range(epoch_num)):
         out = model(data.x, data.edge_index)
         _, pred = out.max(dim=1)
         val_loss = crit(out[idx_val], data.y[idx_val])
-        if val_loss < best_loss:
-            found_better = True
-            best_loss = val_loss
-            model = model.to('cpu')
-            torch.save(model.state_dict(), 'sage_no_cv.pth')
-            model = model.to(device)
     train_corr = float(pred[idx_train_no_val].eq(data.y[idx_train_no_val]).sum().item())
     correct = float(pred[idx_val].eq(data.y[idx_val]).sum().item())
     acc = correct / len(idx_val)
-    if found_better:
+    if acc > best_acc:
+        model = model.to('cpu')
+        torch.save(model.state_dict(), 'sage_no_cv.pth')
+        model = model.to(device)
         best_acc = acc
+        best_loss = val_loss
     if (epoch + 1) % 10 == 0:
         print(f'Epoch: {epoch + 1}, Loss: {loss.item()}, Validation Acc: {acc}, '
               f'Validation loss: {val_loss}, Train Acc: {train_corr / len(idx_train_no_val)}', )
 
-# model = model.to('cpu')
-# torch.save(model.state_dict(), 'sage_no_cv.pth')
+
 print('\n\n\n')
 print(f'Best validation loss: {best_loss}; Corresponding validation accuracy: {best_acc}')
 model.load_state_dict(torch.load('sage_no_cv.pth'))

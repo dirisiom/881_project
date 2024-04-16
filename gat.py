@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch_geometric.data import Data
-from torch_geometric.nn import SAGEConv, GATConv
+from torch_geometric.nn import GATConv
 from torch_geometric.utils import from_scipy_sparse_matrix
 from tqdm import tqdm
 
@@ -31,30 +31,12 @@ data = Data(x=x, edge_index=edge_index, y=y_full)
 print()
 
 
-# GraphSAGE Model
-# class GraphSAGE(torch.nn.Module):
-#     def __init__(self, in_channels, hidden_channels, out_channels):
-#         super(GraphSAGE, self).__init__()
-#         self.conv1 = SAGEConv(in_channels, hidden_channels)
-#         self.bn1 = BatchNorm(hidden_channels)
-#         self.conv2 = SAGEConv(hidden_channels, hidden_channels)
-#         self.bn2 = BatchNorm(hidden_channels)
-#         self.conv3 = SAGEConv(hidden_channels, out_channels)
-#
-#     def forward(self, x, edge_index):
-#         x = F.relu(self.bn1(self.conv1(x, edge_index)))
-#         x = F.dropout(x, training=self.training)
-#         x = F.relu(self.bn2(self.conv2(x, edge_index)))
-#         x = F.dropout(x, training=self.training)
-#         x = self.conv3(x, edge_index)
-#         return F.log_softmax(x, dim=1)
-
 class GATModel(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels):
         super(GATModel, self).__init__()
-        self.gat1 = SAGEConv(in_channels, hidden_channels)
-        self.gat2 = SAGEConv(hidden_channels, hidden_channels)
-        self.gat3 = SAGEConv(hidden_channels, out_channels)
+        self.gat1 = GATConv(in_channels, hidden_channels)
+        self.gat2 = GATConv(hidden_channels, hidden_channels)
+        self.gat3 = GATConv(hidden_channels, out_channels)
 
     def forward(self, x, edge_index):
         x = F.relu(self.gat1(x, edge_index))
@@ -68,7 +50,7 @@ class GATModel(torch.nn.Module):
 num_feats = data.num_features
 num_classes = len(np.unique(data.y.numpy()))
 # TODO: tune
-hidden = 15
+hidden = 8
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = GATModel(num_feats, hidden, num_classes).to(device)
@@ -77,7 +59,7 @@ data.edge_index = data.edge_index.to(device)
 data.y = data.y.to(device)
 
 # TODO: try new optims
-optim = torch.optim.Adam(model.parameters(), lr=0.003, weight_decay=1e-2)
+optim = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=8e-3)
 # optim = torch.optim.Adam(model.parameters(), lr=0.0005)
 crit = torch.nn.NLLLoss()
 
@@ -106,26 +88,23 @@ for epoch in tqdm(range(epoch_num)):
         out = model(data.x, data.edge_index)
         _, pred = out.max(dim=1)
         val_loss = crit(out[idx_val], data.y[idx_val])
-        if val_loss < best_loss:
-            found_better = True
-            best_loss = val_loss
-            model = model.to('cpu')
-            torch.save(model.state_dict(), 'sage_no_cv.pth')
-            model = model.to(device)
     train_corr = float(pred[idx_train_no_val].eq(data.y[idx_train_no_val]).sum().item())
     correct = float(pred[idx_val].eq(data.y[idx_val]).sum().item())
     acc = correct / len(idx_val)
-    if found_better:
+    if acc > best_acc:
+        model = model.to('cpu')
+        torch.save(model.state_dict(), 'gat_no_cv.pth')
+        model = model.to(device)
         best_acc = acc
+        best_loss = val_loss
     if (epoch + 1) % 10 == 0:
         print(f'Epoch: {epoch + 1}, Loss: {loss.item()}, Validation Acc: {acc}, '
               f'Validation loss: {val_loss}, Train Acc: {train_corr / len(idx_train_no_val)}', )
 
-# model = model.to('cpu')
-# torch.save(model.state_dict(), 'sage_no_cv.pth')
+
 print('\n\n\n')
 print(f'Best validation loss: {best_loss}; Corresponding validation accuracy: {best_acc}')
-model.load_state_dict(torch.load('sage_no_cv.pth'))
+model.load_state_dict(torch.load('gat_no_cv.pth'))
 
 model = model.to(device)
 model.eval()
@@ -136,4 +115,4 @@ with torch.no_grad():
 # save our results
 preds = test_preds[idx_test]
 preds = preds.to('cpu')
-np.savetxt('submission_sage.txt', preds, fmt='%d')
+np.savetxt('submission_gat.txt', preds, fmt='%d')
