@@ -1,16 +1,17 @@
+# TODO: FIX or do not use
+
 import json
 
 import numpy as np
 import scipy.sparse as sp
 import torch
 import torch.nn.functional as F
-from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch_geometric.data import Data
 from torch_geometric.nn import GCNConv, BatchNorm
 from torch_geometric.utils import from_scipy_sparse_matrix
 from tqdm import tqdm
-from sklearn.model_selection import train_test_split
 
 adj = sp.load_npz('./data_2024/adj.npz')
 feat = np.load('./data_2024/features.npy')
