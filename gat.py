@@ -51,7 +51,7 @@ class GATModel(torch.nn.Module):
 num_feats = data.num_features
 num_classes = len(np.unique(data.y.numpy()))
 # TODO: tune
-hidden = 8
+hidden = 32
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = GATModel(num_feats, hidden, num_classes).to(device)
@@ -60,14 +60,14 @@ data.edge_index = data.edge_index.to(device)
 data.y = data.y.to(device)
 
 # TODO: try new optims
-optim = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=8e-3)
+optim = torch.optim.Adam(model.parameters(), lr=0.02, weight_decay=4e-3)
 # optim = torch.optim.Adam(model.parameters(), lr=0.0005)
 
 # scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=50, gamma=0.5)
 
 crit = torch.nn.NLLLoss()
 
-idx_train_no_val, idx_val = train_test_split(idx_train, test_size=0.1, random_state=5757)
+idx_train_no_val, idx_val = train_test_split(idx_train, test_size=0.2, random_state=5757)
 
 train_mask = torch.zeros_like(y_full, dtype=torch.bool)
 train_mask[idx_train_no_val] = True
