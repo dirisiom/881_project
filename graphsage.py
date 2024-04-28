@@ -10,6 +10,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import SAGEConv
 from torch_geometric.utils import from_scipy_sparse_matrix
 from tqdm import tqdm
+from matplotlib import pyplot as plt
 
 adj = sp.load_npz('./data_2024/adj.npz')
 feat = np.load('./data_2024/features.npy')
@@ -68,6 +69,11 @@ train_mask[idx_train_no_val] = True
 val_mask = torch.zeros_like(y_full, dtype=torch.bool)
 val_mask[idx_val] = True
 
+# Lists for plotting
+train_losses = []
+val_losses = []
+val_accuracies = []
+
 best_loss = float('inf')
 best_acc = 0
 epoch_num = 400
@@ -79,12 +85,21 @@ for epoch in tqdm(range(epoch_num)):
     loss.backward()
     optim.step()
 
+    train_losses.append(loss.item())
+
     model.eval()
     found_better = False
     with torch.no_grad():
         out = model(data.x, data.edge_index)
         _, pred = out.max(dim=1)
         val_loss = crit(out[idx_val], data.y[idx_val])
+
+        # Added for plotting
+        val_losses.append(val_loss.item())
+        correct = float(pred[idx_val].eq(data.y[idx_val]).sum().item())
+        acc = correct / len(idx_val)
+        val_accuracies.append(acc)
+
     train_corr = float(pred[idx_train_no_val].eq(data.y[idx_train_no_val]).sum().item())
     correct = float(pred[idx_val].eq(data.y[idx_val]).sum().item())
     acc = correct / len(idx_val)
@@ -113,3 +128,23 @@ with torch.no_grad():
 preds = test_preds[idx_test]
 preds = preds.to('cpu')
 np.savetxt('submission_sage.txt', preds, fmt='%d')
+
+#Plot
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 2, 1)
+plt.plot(train_losses, label='Training Loss')
+plt.plot(val_losses, label='Validation Loss')
+plt.title('Training and Validation Loss per Epoch')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+
+plt.subplot(1, 2, 2)
+plt.plot(val_accuracies, label='Validation Accuracy', color='green')
+plt.title('Validation Accuracy per Epoch')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+
+plt.tight_layout()
+plt.show()

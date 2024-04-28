@@ -10,6 +10,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import GATConv
 from torch_geometric.utils import from_scipy_sparse_matrix
 from tqdm import tqdm
+from matplotlib import pyplot as plt
 
 adj = sp.load_npz('./data_2024/adj.npz')
 feat = np.load('./data_2024/features.npy')
@@ -61,6 +62,9 @@ data.y = data.y.to(device)
 # TODO: try new optims
 optim = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=8e-3)
 # optim = torch.optim.Adam(model.parameters(), lr=0.0005)
+
+# scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=50, gamma=0.5)
+
 crit = torch.nn.NLLLoss()
 
 idx_train_no_val, idx_val = train_test_split(idx_train, test_size=0.1, random_state=5757)
@@ -70,6 +74,9 @@ train_mask[idx_train_no_val] = True
 val_mask = torch.zeros_like(y_full, dtype=torch.bool)
 val_mask[idx_val] = True
 
+# train_losses = []
+# val_losses = []
+# val_accuracies = []
 
 best_loss = float('inf')
 best_acc = 0
@@ -81,6 +88,9 @@ for epoch in tqdm(range(epoch_num)):
     loss = crit(out[idx_train_no_val], data.y[idx_train_no_val])
     loss.backward()
     optim.step()
+    # scheduler.step()
+
+    # train_losses.append(loss.item())
 
     model.eval()
     found_better = False
@@ -88,6 +98,12 @@ for epoch in tqdm(range(epoch_num)):
         out = model(data.x, data.edge_index)
         _, pred = out.max(dim=1)
         val_loss = crit(out[idx_val], data.y[idx_val])
+
+        # val_losses.append(val_loss.item())
+        # correct = float(pred[idx_val].eq(data.y[idx_val]).sum().item())
+        # acc = correct / len(idx_val)
+        # val_accuracies.append(acc)
+
     train_corr = float(pred[idx_train_no_val].eq(data.y[idx_train_no_val]).sum().item())
     correct = float(pred[idx_val].eq(data.y[idx_val]).sum().item())
     acc = correct / len(idx_val)
@@ -116,3 +132,22 @@ with torch.no_grad():
 preds = test_preds[idx_test]
 preds = preds.to('cpu')
 np.savetxt('submission_gat.txt', preds, fmt='%d')
+
+# plt.figure(figsize=(12, 5))
+# plt.subplot(1, 2, 1)
+# plt.plot(train_losses, label='Training Loss')
+# plt.plot(val_losses, label='Validation Loss')
+# plt.title('Training and Validation Loss per Epoch')
+# plt.xlabel('Epoch')
+# plt.ylabel('Loss')
+# plt.legend()
+#
+# plt.subplot(1, 2, 2)
+# plt.plot(val_accuracies, label='Validation Accuracy', color='green')
+# plt.title('Validation Accuracy per Epoch')
+# plt.xlabel('Epoch')
+# plt.ylabel('Accuracy')
+# plt.legend()
+#
+# plt.tight_layout()
+# plt.show()
