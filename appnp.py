@@ -45,7 +45,7 @@ class APPNPModel(torch.nn.Module):
 num_feats = data.num_features
 num_classes = len(np.unique(data.y.numpy()))
 # Tune this
-hidden = 48
+hidden = 64
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = APPNPModel(num_feats, hidden, num_classes).to(device)
@@ -53,8 +53,9 @@ data.x = data.x.to(device)
 data.edge_index = data.edge_index.to(device)
 data.y = data.y.to(device)
 
-optim = torch.optim.Adam(model.parameters(), lr=0.002, weight_decay=1e-3)
+optim = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
 crit = torch.nn.CrossEntropyLoss()
+# crit = torch.nn.NLLLoss()
 
 idx_train_no_val, idx_val = train_test_split(idx_train, test_size=0.2, random_state=5757)
 
@@ -69,7 +70,7 @@ val_accuracies = []
 
 best_loss = float('inf')
 best_acc = 0
-epoch_num = 200
+epoch_num = 300
 
 for epoch in tqdm(range(epoch_num)):
     model.train()
